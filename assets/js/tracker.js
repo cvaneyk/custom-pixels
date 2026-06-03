@@ -257,7 +257,38 @@
     const action = form.getAttribute("action") || "";
     if (action.includes("?s=") || form.querySelector('input[name="s"]')) return;
 
+    // Extract user data from form fields
+    const userData = {};
+
+    // Find email field
+    const emailInput = form.querySelector('input[type="email"]') || 
+                       form.querySelector('input[name*="email" i]') || 
+                       form.querySelector('input[name*="correo" i]') || 
+                       form.querySelector('input[name*="mail" i]') ||
+                       form.querySelector('input[id*="email" i]') || 
+                       form.querySelector('input[id*="correo" i]') || 
+                       form.querySelector('input[id*="mail" i]');
+    if (emailInput && emailInput.value) {
+      userData.email = emailInput.value.trim().toLowerCase();
+    }
+
+    // Find phone field
+    const phoneInput = form.querySelector('input[type="tel"]') || 
+                       form.querySelector('input[name*="phone" i]') || 
+                       form.querySelector('input[name*="tel" i]') || 
+                       form.querySelector('input[name*="movil" i]') ||
+                       form.querySelector('input[name*="celular" i]') ||
+                       form.querySelector('input[id*="phone" i]') || 
+                       form.querySelector('input[id*="tel" i]') || 
+                       form.querySelector('input[id*="movil" i]') ||
+                       form.querySelector('input[id*="celular" i]');
+    if (phoneInput && phoneInput.value) {
+      // Keep only numbers and optional leading +
+      userData.phone = phoneInput.value.trim().replace(/[^\d+]/g, '');
+    }
+
     track("CompleteRegistration", {
+      user_data: userData,
       custom_data: {
         form_id: form.id || "",
         form_action: action,

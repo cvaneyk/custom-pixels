@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Custom Pixels (Meta + TikTok)
  * Description: Full-funnel tracking for Meta and TikTok with browser + server events.
- * Version: 0.1.2
+ * Version: 0.1.3
  * Author: Carlos Van Eyk - Olimedia Agencia de Marketing
  * License: GPL-3.0-or-later
  * Text Domain: custom-pixels
@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('CUSTOM_PIXELS_VERSION', '0.1.2');
+define('CUSTOM_PIXELS_VERSION', '0.1.3');
 define('CUSTOM_PIXELS_FILE', __FILE__);
 define('CUSTOM_PIXELS_DIR', plugin_dir_path(__FILE__));
 define('CUSTOM_PIXELS_URL', plugin_dir_url(__FILE__));
