@@ -20,7 +20,7 @@ class Custom_Pixels_GitHub_Updater
         $settings = get_option('custom_pixels_settings', array());
         $this->github_repo = sanitize_text_field($settings['github_repo'] ?? 'cvaneyk/custom-pixels');
         $this->cache_key = 'custom_pixels_updater_' . md5($this->github_repo);
-        $this->cache_allowed = false;
+        $this->cache_allowed = empty($settings['debug_mode']);
 
         if (empty($this->github_repo)) {
             return;
@@ -110,9 +110,11 @@ class Custom_Pixels_GitHub_Updater
 
     private function get_github_release_info()
     {
-        $cached = get_transient($this->cache_key);
-        if ($cached !== false) {
-            return $cached;
+        if ($this->cache_allowed) {
+            $cached = get_transient($this->cache_key);
+            if ($cached !== false) {
+                return $cached;
+            }
         }
 
         $request_url = 'https://api.github.com/repos/' . $this->github_repo . '/releases/latest';

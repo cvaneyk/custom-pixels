@@ -214,12 +214,18 @@
 
     let eventName = "Click";
     let customData = {};
+    let userData = {};
 
     if (target.hasAttribute("data-track-click")) {
       eventName = target.getAttribute("data-track-click") || "Click";
     } else if (target.tagName.toLowerCase() === "a") {
-      const href = target.getAttribute("href");
-      if (href && href.startsWith("http") && !href.includes(window.location.hostname)) {
+      const href = target.getAttribute("href") || "";
+      if (href.startsWith("tel:")) {
+        eventName = "Contact";
+        const phoneVal = href.replace("tel:", "").trim();
+        customData = { type: "phone", value: phoneVal };
+        userData = { phone: phoneVal.replace(/[^\d+]/g, '') };
+      } else if (href && href.startsWith("http") && !href.includes(window.location.hostname)) {
         eventName = "OutboundClick";
         customData = { url: href, text: target.innerText.trim() };
       } else {
@@ -229,7 +235,7 @@
       return;
     }
 
-    track(eventName, { custom_data: customData });
+    track(eventName, { user_data: userData, custom_data: customData });
   });
 
   // Scroll tracking
