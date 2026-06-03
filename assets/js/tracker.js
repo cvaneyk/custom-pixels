@@ -151,6 +151,59 @@
     }
   }
 
+  function interceptMetaEvents() {
+    const handleFbqCall = function (target, thisArg, argumentsList) {
+      const action = argumentsList[0];
+      const eventName = argumentsList[1];
+      if ((action === "track" || action === "trackCustom") && eventName === "Form submitted") {
+        log("Intercepted 'Form submitted' event. Triggering 'CompleteRegistration'...");
+        track("CompleteRegistration", {
+          custom_data: argumentsList[2] || {},
+        });
+      }
+      return Reflect.apply(target, thisArg, argumentsList);
+    };
+
+    if (!window.fbq) {
+      let currentFbq = undefined;
+      Object.defineProperty(window, "fbq", {
+        get() {
+          return currentFbq;
+        },
+        set(val) {
+          if (val && !val.isWrappedByCustomPixels) {
+            currentFbq = new Proxy(val, {
+              apply: handleFbqCall,
+              get(target, prop, receiver) {
+                if (prop === "isWrappedByCustomPixels") return true;
+                return Reflect.get(target, prop, receiver);
+              },
+              set(target, prop, value, receiver) {
+                return Reflect.set(target, prop, value, receiver);
+              }
+            });
+          } else {
+            currentFbq = val;
+          }
+        },
+        configurable: true,
+        enumerable: true,
+      });
+    } else if (!window.fbq.isWrappedByCustomPixels) {
+      window.fbq = new Proxy(window.fbq, {
+        apply: handleFbqCall,
+        get(target, prop, receiver) {
+          if (prop === "isWrappedByCustomPixels") return true;
+          return Reflect.get(target, prop, receiver);
+        },
+        set(target, prop, value, receiver) {
+          return Reflect.set(target, prop, value, receiver);
+        }
+      });
+    }
+  }
+
+  interceptMetaEvents();
   loadMetaPixel(cfg.metaPixelId);
   loadTikTokPixel(cfg.tiktokPixelId);
 
