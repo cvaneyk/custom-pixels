@@ -6,6 +6,17 @@ if (!defined('ABSPATH')) {
 
 class Custom_Pixels_Event_Dispatcher
 {
+    /**
+     * First-party cookies set by each pixel, read server-side when the browser didn't send them.
+     */
+    private static $cookie_map = array(
+        'fbp' => '_fbp',
+        'fbc' => '_fbc',
+        'ttp' => '_ttp',
+        'obref' => '__obref',
+        'oppref' => '__oppref',
+    );
+
     public static function register_routes()
     {
         register_rest_route('custom-pixels/v1', '/track', array(
@@ -17,7 +28,7 @@ class Custom_Pixels_Event_Dispatcher
 
     public static function handle_track_request(WP_REST_Request $request)
     {
-        $settings = get_option('custom_pixels_settings', array());
+        $settings = Custom_Pixels_Settings_Page::get_settings();
         $payload = $request->get_json_params() ?: array();
 
         if (!self::has_consent($payload, $settings)) {
@@ -40,11 +51,18 @@ class Custom_Pixels_Event_Dispatcher
             $normalized['user_data']['client_user_agent'] = sanitize_text_field($_SERVER['HTTP_USER_AGENT'] ?? '');
         }
 
-        $normalized['user_data'] = Custom_Pixels_Event_Normalizer::maybe_hash_user_data($normalized['user_data']);
+        foreach (self::$cookie_map as $key => $cookie) {
+            if (empty($normalized['user_data'][$key]) && !empty($_COOKIE[$cookie])) {
+                $normalized['user_data'][$key] = sanitize_text_field(wp_unslash($_COOKIE[$cookie]));
+            }
+        }
+
+        $normalized['user_data'] = Custom_Pixels_Event_Normalizer::hash_user_data($normalized['user_data'], $settings);
 
         $results = array(
-            'meta' => array('browser' => false, 'server' => false),
-            'tiktok' => array('browser' => false, 'server' => false),
+            'meta' => array('server' => false),
+            'tiktok' => array('server' => false),
+            'openai' => array('server' => false),
             'event_id' => $normalized['event_id'],
             'event_name' => $normalized['event_name'],
         );
@@ -54,6 +72,9 @@ class Custom_Pixels_Event_Dispatcher
         }
         if (!empty($settings['enable_tiktok_server'])) {
             $results['tiktok']['server'] = Custom_Pixels_TikTok_Events_API_Adapter::send($normalized, $settings);
+        }
+        if (!empty($settings['enable_openai_server'])) {
+            $results['openai']['server'] = Custom_Pixels_OpenAI_Conversions_API_Adapter::send($normalized, $settings);
         }
 
         self::debug_log($normalized, $results, $settings);
