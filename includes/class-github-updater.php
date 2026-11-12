@@ -70,7 +70,7 @@ class Custom_Pixels_GitHub_Updater
         }
 
         $plugin_info = new stdClass();
-        $plugin_info->name = 'Custom Pixels (Meta + TikTok)';
+        $plugin_info->name = 'Custom Pixels (Meta + TikTok + ChatGPT)';
         $plugin_info->slug = dirname($this->plugin_slug);
         $plugin_info->version = $github_info['version'];
         $plugin_info->author = 'Custom Pixels';
@@ -110,10 +110,16 @@ class Custom_Pixels_GitHub_Updater
 
     private function get_github_release_info()
     {
-        if ($this->cache_allowed) {
+        // "Check again" in Dashboard > Updates adds force-check=1: skip our cache too, otherwise a new release stays hidden until it expires.
+        $force_check = !empty($_GET['force-check']) && current_user_can('update_plugins');
+
+        if ($this->cache_allowed && !$force_check) {
             $cached = get_transient($this->cache_key);
-            if ($cached !== false) {
+            if (is_array($cached)) {
                 return $cached;
+            }
+            if ($cached === 'error') {
+                return false;
             }
         }
 
@@ -127,7 +133,8 @@ class Custom_Pixels_GitHub_Updater
         ));
 
         if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
-            set_transient($this->cache_key, false, 15 * MINUTE_IN_SECONDS);
+            // get_transient() can't tell a stored false from a miss, so failures are cached as 'error'.
+            set_transient($this->cache_key, 'error', 15 * MINUTE_IN_SECONDS);
             return false;
         }
 
@@ -147,7 +154,7 @@ class Custom_Pixels_GitHub_Updater
             'changelog' => $data['body'] ?? ''
         );
 
-        set_transient($this->cache_key, $info, 12 * HOUR_IN_SECONDS);
+        set_transient($this->cache_key, $info, 6 * HOUR_IN_SECONDS);
 
         return $info;
     }
