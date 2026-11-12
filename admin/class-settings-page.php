@@ -22,6 +22,12 @@ class Custom_Pixels_Settings_Page
             'openai_pixel_id' => '',
             'openai_api_key' => '',
             'openai_validate_only' => 0,
+            'ga4_measurement_id' => '',
+            'ga4_send_events' => 1,
+            'gtm_container_id' => '',
+            'gtm_datalayer_events' => 1,
+            'clarity_project_id' => '',
+            'moove_marketing_category' => 'thirdparty',
             'default_country' => 'ES',
             'default_phone_prefix' => '34',
             'debug_mode' => 0,
@@ -87,6 +93,12 @@ class Custom_Pixels_Settings_Page
             'openai_pixel_id' => sanitize_text_field($input['openai_pixel_id'] ?? ''),
             'openai_api_key' => sanitize_text_field($input['openai_api_key'] ?? ''),
             'openai_validate_only' => !empty($input['openai_validate_only']) ? 1 : 0,
+            'ga4_measurement_id' => self::sanitize_tag_id($input['ga4_measurement_id'] ?? '', '/^G-[A-Z0-9]+$/'),
+            'ga4_send_events' => !empty($input['ga4_send_events']) ? 1 : 0,
+            'gtm_container_id' => self::sanitize_tag_id($input['gtm_container_id'] ?? '', '/^GTM-[A-Z0-9]+$/'),
+            'gtm_datalayer_events' => !empty($input['gtm_datalayer_events']) ? 1 : 0,
+            'clarity_project_id' => strtolower(self::sanitize_tag_id($input['clarity_project_id'] ?? '', '/^[A-Z0-9]+$/')),
+            'moove_marketing_category' => ($input['moove_marketing_category'] ?? '') === 'advanced' ? 'advanced' : 'thirdparty',
             'default_country' => strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $input['default_country'] ?? ''), 0, 2)),
             'default_phone_prefix' => preg_replace('/\D+/', '', (string) ($input['default_phone_prefix'] ?? '')),
             'debug_mode' => !empty($input['debug_mode']) ? 1 : 0,
@@ -99,6 +111,26 @@ class Custom_Pixels_Settings_Page
             'enable_openai_server' => !empty($input['enable_openai_server']) ? 1 : 0,
             'github_repo' => sanitize_text_field($input['github_repo'] ?? ''),
         );
+    }
+
+    /**
+     * Upper-cases and validates a tag ID (e.g. G-XXXX, GTM-XXXX). Returns '' when it doesn't match.
+     */
+    private static function sanitize_tag_id($value, $pattern)
+    {
+        $value = strtoupper(preg_replace('/\s+/', '', sanitize_text_field((string) $value)));
+        return preg_match($pattern, $value) ? $value : '';
+    }
+
+    private static function detected_cookie_banner()
+    {
+        if (defined('cmplz_version') || function_exists('cmplz_has_consent')) {
+            return 'Complianz';
+        }
+        if (defined('MOOVE_GDPR_VERSION') || function_exists('gdpr_cookie_is_accepted')) {
+            return 'GDPR Cookie Compliance';
+        }
+        return '';
     }
 
     public static function render()
@@ -171,7 +203,29 @@ class Custom_Pixels_Settings_Page
                             array('openai_validate_only', 'Modo validación', 'El servidor valida los eventos sin guardarlos (solo pruebas).'),
                         ),
                     ), $settings);
+
+                    $analytics_active = $settings['ga4_measurement_id'] || $settings['gtm_container_id'] || $settings['clarity_project_id'];
                     ?>
+
+                    <section class="cp-card cp-card--analytics">
+                        <div class="cp-card__head">
+                            <span class="cp-badge cp-badge--analytics" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20V14"/><path d="M12 20V9"/><path d="M18 20V4"/></svg>
+                            </span>
+                            <div>
+                                <h2 class="cp-card__title">Analítica</h2>
+                                <p class="cp-card__desc">Google Analytics 4, Tag Manager y Microsoft Clarity</p>
+                            </div>
+                            <span class="cp-status <?php echo $analytics_active ? 'is-active' : 'is-off'; ?>"><?php echo $analytics_active ? 'Activo' : 'Sin configurar'; ?></span>
+                        </div>
+                        <div class="cp-card__body">
+                            <?php self::field('ga4_measurement_id', 'GA4 Measurement ID', 'text', 'G-XXXXXXXXXX', $settings, 'Déjalo vacío si GA4 ya se carga desde Tag Manager o Site Kit.'); ?>
+                            <?php self::toggle('ga4_send_events', 'Enviar eventos a GA4', 'Formularios → generate_lead, clics en teléfono/WhatsApp, compras…', $settings); ?>
+                            <?php self::field('gtm_container_id', 'Tag Manager Container ID', 'text', 'GTM-XXXXXXX', $settings, 'No añadas dentro de GTM los píxeles de Meta/TikTok/ChatGPT: ya los carga el plugin.'); ?>
+                            <?php self::toggle('gtm_datalayer_events', 'Eventos al dataLayer', 'Publica cp_purchase, cp_complete_registration, cp_contact… para usarlos como activadores.', $settings); ?>
+                            <?php self::field('clarity_project_id', 'Clarity Project ID', 'text', 'abcd1234ef', $settings); ?>
+                        </div>
+                    </section>
 
                     <section class="cp-card cp-card--general">
                         <div class="cp-card__head">
@@ -184,7 +238,21 @@ class Custom_Pixels_Settings_Page
                             </div>
                         </div>
                         <div class="cp-card__body">
-                            <?php self::toggle('require_consent', 'Requerir consentimiento', 'No se envía nada hasta llamar a <code>window.CustomPixels.grantConsent()</code>.', $settings); ?>
+                            <?php self::toggle('require_consent', 'Requerir consentimiento', 'Píxeles de anuncios bloqueados y GA4/Clarity sin cookies hasta que el usuario acepte.', $settings); ?>
+                            <?php $banner = self::detected_cookie_banner(); ?>
+                            <p class="cp-notice <?php echo $banner ? 'is-ok' : ''; ?>">
+                                <?php if ($banner) : ?>
+                                    Banner de cookies detectado: <strong><?php echo esc_html($banner); ?></strong>. El consentimiento se sincroniza automáticamente (estadísticas → GA4/Clarity, marketing → píxeles).
+                                <?php else : ?>
+                                    No se ha detectado Complianz ni GDPR Cookie Compliance. Llama a <code>window.CustomPixels.grantConsent()</code> desde tu banner.
+                                <?php endif; ?>
+                            </p>
+                            <?php
+                            self::select('moove_marketing_category', 'GDPR Cookie Compliance: categoría de marketing', array(
+                                'thirdparty' => 'Cookies de terceros',
+                                'advanced' => 'Cookies adicionales',
+                            ), $settings, 'Qué categoría del banner de Moove autoriza los píxeles de anuncios. Las estadísticas usan siempre "Cookies de terceros".');
+                            ?>
                             <?php self::toggle('debug_mode', 'Modo debug', 'Logs en la consola del navegador y en <code>error_log</code>.', $settings); ?>
                             <div class="cp-field-row">
                                 <?php self::field('default_country', 'País por defecto', 'text', 'ES', $settings, 'ISO de 2 letras. Se envía a ChatGPT.'); ?>
@@ -282,6 +350,24 @@ class Custom_Pixels_Settings_Page
             <?php else : ?>
                 <input type="text" spellcheck="false" class="cp-input" id="<?php echo esc_attr($id); ?>" name="<?php echo esc_attr($name); ?>" value="<?php echo esc_attr($settings[$key] ?? ''); ?>" placeholder="<?php echo esc_attr($placeholder); ?>">
             <?php endif; ?>
+            <?php if ($help !== '') : ?>
+                <p class="cp-help"><?php echo esc_html($help); ?></p>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+
+    private static function select($key, $label, array $options, $settings, $help = '')
+    {
+        $id = 'cp_' . $key;
+        ?>
+        <div class="cp-field">
+            <label class="cp-label" for="<?php echo esc_attr($id); ?>"><?php echo esc_html($label); ?></label>
+            <select class="cp-input cp-select" id="<?php echo esc_attr($id); ?>" name="<?php echo esc_attr(self::OPTION . '[' . $key . ']'); ?>">
+                <?php foreach ($options as $value => $text) : ?>
+                    <option value="<?php echo esc_attr($value); ?>" <?php selected($settings[$key] ?? '', $value); ?>><?php echo esc_html($text); ?></option>
+                <?php endforeach; ?>
+            </select>
             <?php if ($help !== '') : ?>
                 <p class="cp-help"><?php echo esc_html($help); ?></p>
             <?php endif; ?>

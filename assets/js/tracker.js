@@ -31,10 +31,34 @@
     }
   }
 
+  // Plugin event => GA4 event. Contact becomes contact_phone / contact_whatsapp.
+  const GA4_EVENTS = {
+    ViewContent: "view_item",
+    AddToCart: "add_to_cart",
+    InitiateCheckout: "begin_checkout",
+    AddPaymentInfo: "add_payment_info",
+    Purchase: "purchase",
+    Search: "search",
+    CompleteRegistration: "generate_lead",
+    Lead: "generate_lead",
+    Schedule: "schedule",
+    Subscribe: "subscribe",
+    StartTrial: "start_trial",
+  };
+
+  // statistics => GA4/Clarity storage, marketing => ad pixels. Seeded by the <head> script (Custom_Pixels_Analytics_Tags).
+  const consentState = Object.assign(
+    { statistics: !cfg.requireConsent, marketing: !cfg.requireConsent },
+    window.CustomPixelsConsentState || {}
+  );
+  if (window.customPixelsConsent === true) {
+    consentState.statistics = consentState.marketing = true;
+  }
+
   function hasConsent(payload) {
     if (!cfg.requireConsent) return true;
     if (payload && payload.consent === true) return true;
-    return window.customPixelsConsent === true;
+    return consentState.marketing || window.customPixelsConsent === true;
   }
 
   function generateEventId() {
@@ -280,6 +304,63 @@
     return { name, data, customName };
   }
 
+  /* ------------------------------------------------- GA4 / Tag Manager */
+
+  function ga4Items(customData) {
+    if (Array.isArray(customData.contents)) {
+      return customData.contents
+        .filter((item) => item && (item.id || item.content_id))
+        .map((item) => {
+          const ga = { item_id: String(item.id || item.content_id) };
+          if (item.quantity) ga.quantity = parseInt(item.quantity, 10);
+          if (item.item_price || item.price) ga.price = Number(item.item_price || item.price);
+          return ga;
+        });
+    }
+    if (Array.isArray(customData.content_ids)) {
+      return customData.content_ids.map((id) => ({ item_id: String(id) }));
+    }
+    return [];
+  }
+
+  function toSnakeCase(name) {
+    return String(name).replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/[^A-Za-z0-9_]+/g, "_").toLowerCase();
+  }
+
+  // GA4 and GTM apply Consent Mode themselves, so these fire regardless of marketing consent. No user data is sent.
+  function fireAnalytics(eventName, customData, eventId) {
+    customData = customData || {};
+
+    if (cfg.dataLayerEvents) {
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push({
+        event: "cp_" + toSnakeCase(eventName),
+        cp_event_id: eventId,
+        cp_data: customData,
+      });
+    }
+
+    if (!cfg.ga4Events || typeof window.gtag !== "function") return;
+
+    let name = GA4_EVENTS[eventName];
+    if (eventName === "Contact") name = "contact_" + toSnakeCase(customData.type || "other");
+    if (!name) return;
+
+    const params = { event_id: eventId };
+    const value = Number(customData.value);
+    if (customData.value !== undefined && customData.value !== "" && !isNaN(value)) {
+      params.value = value;
+      if (customData.currency) params.currency = String(customData.currency).toUpperCase();
+    }
+    if (customData.order_id) params.transaction_id = String(customData.order_id);
+    if (customData.search_string || customData.search_term) params.search_term = customData.search_string || customData.search_term;
+    if (customData.form_id) params.form_id = customData.form_id;
+    const items = ga4Items(customData);
+    if (items.length) params.items = items;
+
+    window.gtag("event", name, params);
+  }
+
   /* -------------------------------------------------------------- Firing */
 
   async function fireBrowser(eventName, customData, eventId, userData) {
@@ -353,6 +434,15 @@
       custom_data: payload.custom_data || {},
     };
 
+    // Events replayed from the consent queue were already sent to analytics.
+    if (!payload._skipAnalytics) {
+      try {
+        fireAnalytics(eventName, normalized.custom_data, eventId);
+      } catch (err) {
+        log("Analytics tracking error:", err);
+      }
+    }
+
     if (!consent) {
       log("Consent missing, event queued:", normalized);
       queue.push(normalized);
@@ -377,15 +467,36 @@
     return { sent: true, event_id: eventId };
   }
 
-  function applyConsentToPixels() {
-    if (window.fbq) window.fbq("consent", "grant");
-    if (window.ttq && window.ttq.grantConsent) window.ttq.grantConsent();
-    if (window.oaiq) window.oaiq("consent", true);
+  function applyConsentToPixels(granted) {
+    if (window.fbq) window.fbq("consent", granted ? "grant" : "revoke");
+    if (window.ttq) {
+      if (granted && window.ttq.grantConsent) window.ttq.grantConsent();
+      if (!granted && window.ttq.revokeConsent) window.ttq.revokeConsent();
+    }
+    if (window.oaiq) window.oaiq("consent", !!granted);
+  }
+
+  function applyConsentToAnalytics() {
+    const v = (granted) => (granted ? "granted" : "denied");
+    if (typeof window.gtag === "function") {
+      window.gtag("consent", "update", {
+        analytics_storage: v(consentState.statistics),
+        ad_storage: v(consentState.marketing),
+        ad_user_data: v(consentState.marketing),
+        ad_personalization: v(consentState.marketing),
+      });
+    }
+    if (typeof window.clarity === "function") {
+      window.clarity("consentv2", {
+        ad_Storage: v(consentState.marketing),
+        analytics_Storage: v(consentState.statistics),
+      });
+    }
   }
 
   function flushQueue() {
     if (!hasConsent({})) return;
-    applyConsentToPixels();
+    applyConsentToPixels(true);
     while (queue.length > 0) {
       const ev = queue.shift();
       track(ev.event_name, {
@@ -393,13 +504,56 @@
         consent: true,
         user_data: ev.user_data,
         custom_data: ev.custom_data,
+        _skipAnalytics: true,
       });
     }
   }
 
+  // setConsent({ statistics: true, marketing: false }); omitted categories keep their current value.
+  function setConsent(categories) {
+    const next = Object.assign({}, consentState, categories || {});
+    next.statistics = !!next.statistics;
+    next.marketing = !!next.marketing;
+    if (next.statistics === consentState.statistics && next.marketing === consentState.marketing) return;
+
+    const marketingChanged = next.marketing !== consentState.marketing;
+    Object.assign(consentState, next);
+    window.customPixelsConsent = consentState.marketing;
+    log("Consent updated:", consentState);
+
+    applyConsentToAnalytics();
+    if (marketingChanged) {
+      if (consentState.marketing) {
+        flushQueue();
+      } else {
+        applyConsentToPixels(false);
+      }
+    }
+  }
+
   function grantConsent() {
-    window.customPixelsConsent = true;
-    flushQueue();
+    setConsent({ statistics: true, marketing: true });
+  }
+
+  function revokeConsent() {
+    setConsent({ statistics: false, marketing: false });
+  }
+
+  // Keeps consent in sync with Complianz / GDPR Cookie Compliance (detected by window.CustomPixelsCmp in <head>).
+  function watchCookieBanner() {
+    if (!cfg.requireConsent || typeof window.CustomPixelsCmp !== "function") return;
+    const sync = function () {
+      const detected = window.CustomPixelsCmp();
+      if (detected) setConsent(detected);
+    };
+    ["cmplz_status_change", "cmplz_enable_category", "cmplz_revoke"].forEach((name) => {
+      document.addEventListener(name, function () {
+        setTimeout(sync, 0);
+      });
+    });
+    // GDPR Cookie Compliance has no public JS event, so its cookie is polled.
+    setInterval(sync, 1500);
+    sync();
   }
 
   function interceptMetaEvents() {
@@ -559,7 +713,11 @@
     track,
     flushQueue,
     grantConsent,
+    revokeConsent,
+    setConsent,
+    getConsent: () => Object.assign({}, consentState),
   };
 
   track("PageView", { consent: hasConsent({}) });
+  watchCookieBanner();
 })();

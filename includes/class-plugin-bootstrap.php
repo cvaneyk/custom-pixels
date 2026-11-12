@@ -17,6 +17,7 @@ class Custom_Pixels_Plugin_Bootstrap
         add_action('rest_api_init', array('Custom_Pixels_Event_Dispatcher', 'register_routes'));
 
         Custom_Pixels_Custom_Checkout_Hooks::register();
+        Custom_Pixels_Analytics_Tags::register();
 
         if (is_admin()) {
             new Custom_Pixels_GitHub_Updater();
@@ -39,6 +40,7 @@ class Custom_Pixels_Plugin_Bootstrap
         require_once CUSTOM_PIXELS_DIR . 'includes/providers/openai/class-openai-conversions-api-adapter.php';
 
         require_once CUSTOM_PIXELS_DIR . 'includes/integrations/class-custom-checkout-hooks.php';
+        require_once CUSTOM_PIXELS_DIR . 'includes/integrations/class-analytics-tags.php';
         require_once CUSTOM_PIXELS_DIR . 'includes/class-github-updater.php';
     }
 
@@ -68,6 +70,8 @@ class Custom_Pixels_Plugin_Bootstrap
             'enableTikTokServer' => !empty($settings['enable_tiktok_server']),
             'enableOpenAIBrowser' => !empty($settings['enable_openai_browser']),
             'enableOpenAIServer' => !empty($settings['enable_openai_server']),
+            'ga4Events' => !empty($settings['ga4_measurement_id']) && !empty($settings['ga4_send_events']),
+            'dataLayerEvents' => !empty($settings['gtm_container_id']) && !empty($settings['gtm_datalayer_events']),
             'defaultCountry' => strtoupper(sanitize_text_field($settings['default_country'] ?? '')),
             'defaultPhonePrefix' => preg_replace('/\D+/', '', (string) ($settings['default_phone_prefix'] ?? '')),
             'userData' => array(

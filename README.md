@@ -27,6 +27,26 @@ Plugin de WordPress para tracking full-funnel con envío browser + server y dedu
 
 Los importes se envían a ChatGPT en unidades menores (49,90 EUR → `amount: 4990`).
 
+## Analítica: GA4, Tag Manager y Clarity
+
+Se cargan en el `<head>` con **Consent Mode v2** (GA4/GTM) y **Clarity Consent API v2**, en `denied` hasta que el usuario acepta.
+
+| Evento del plugin | GA4 | dataLayer (GTM) |
+|---|---|---|
+| CompleteRegistration / Lead | `generate_lead` | `cp_complete_registration` / `cp_lead` |
+| Contact (teléfono / WhatsApp) | `contact_phone` / `contact_whatsapp` | `cp_contact` (`cp_data.type`) |
+| ViewContent, AddToCart, InitiateCheckout, AddPaymentInfo, Purchase, Search | `view_item`, `add_to_cart`, `begin_checkout`, `add_payment_info`, `purchase`, `search` | `cp_<evento>` |
+
+Cada push al dataLayer lleva `cp_event_id` y `cp_data` (sin datos personales). No configures en GTM los píxeles de Meta/TikTok/ChatGPT ni una etiqueta de GA4 si ya pones el Measurement ID en el plugin: se duplicarían.
+
+## Consentimiento
+
+Dos categorías: **estadísticas** (GA4, Clarity) y **marketing** (Meta, TikTok, ChatGPT, envíos server-side).
+
+- **Complianz**: se sincroniza solo (`cmplz_has_consent`, cookies `cmplz_statistics` / `cmplz_marketing` y eventos `cmplz_status_change`). No actives en Complianz sus propias integraciones de GA4/GTM/Clarity.
+- **GDPR Cookie Compliance (Moove)**: se lee la cookie `moove_gdpr_popup`. "Cookies de terceros" = estadísticas; la categoría de marketing se elige en Ajustes (terceros o adicionales).
+- **Otro banner**: `window.CustomPixels.setConsent({ statistics: true, marketing: false })`, `grantConsent()` o `revokeConsent()`.
+
 ## Integración de checkout personalizado
 
 Dispara hooks desde tu lógica de negocio:
@@ -55,7 +75,7 @@ do_action('custom_pixels_purchase', $payload);
 ## API JS frontend
 
 ```js
-// Si "Requerir consentimiento" está activo, llama a esto desde tu banner de cookies.
+// Solo si tu banner no es Complianz ni GDPR Cookie Compliance (esos se detectan solos).
 window.CustomPixels.grantConsent();
 
 window.CustomPixels.track("AddToCart", {

@@ -68,6 +68,7 @@
 .cp-card--meta { --cp-card-accent: var(--cp-meta); --cp-card-accent-solid: var(--cp-meta); }
 .cp-card--tiktok { --cp-card-accent: linear-gradient(90deg, #25f4ee, #111 50%, #fe2c55); --cp-card-accent-solid: #fe2c55; }
 .cp-card--openai { --cp-card-accent: var(--cp-openai); --cp-card-accent-solid: var(--cp-openai); }
+.cp-card--analytics { --cp-card-accent: #e37400; --cp-card-accent-solid: #e37400; }
 .cp-card--general { --cp-card-accent: #9ca3af; }
 .cp-card--docs { margin-top: 18px; --cp-card-accent: #9ca3af; }
 
@@ -90,7 +91,19 @@
 .cp-badge--meta { background: var(--cp-meta); }
 .cp-badge--tiktok { background: var(--cp-tiktok); box-shadow: inset -2px -2px 0 #fe2c55, inset 2px 2px 0 #25f4ee; }
 .cp-badge--openai { background: var(--cp-openai); font-size: 12px; }
+.cp-badge--analytics { background: #e37400; }
 .cp-badge--general { background: #f3f4f6; color: #374151; }
+
+.cp-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fffaeb;
+  color: #93370d;
+  font-size: 12.5px;
+}
+.cp-notice.is-ok { background: #ecfdf3; color: #05603a; }
+.cp-notice code { font-size: 11.5px; }
 
 /* Status pill */
 .cp-status {
@@ -126,6 +139,7 @@
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
   outline: none;
 }
+.cp-wrap .cp-select { max-width: none; font-family: inherit; }
 .cp-help { margin: 0; color: var(--cp-muted); font-size: 12px; }
 .cp-help code, .cp-toggle__help code { font-size: 11.5px; padding: 1px 4px; border-radius: 4px; }
 

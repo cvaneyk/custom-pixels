@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Custom Pixels (Meta + TikTok + ChatGPT)
- * Description: Full-funnel tracking for Meta, TikTok and ChatGPT (OpenAI Ads) with browser + server events.
- * Version: 0.2.0
+ * Description: Full-funnel tracking for Meta, TikTok and ChatGPT (OpenAI Ads) with browser + server events, plus GA4, Google Tag Manager and Microsoft Clarity with Consent Mode v2.
+ * Version: 0.3.0
  * Author: Carlos Van Eyk - Olimedia Agencia de Marketing
  * License: GPL-3.0-or-later
  * Text Domain: custom-pixels
@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('CUSTOM_PIXELS_VERSION', '0.2.0');
+define('CUSTOM_PIXELS_VERSION', '0.3.0');
 define('CUSTOM_PIXELS_FILE', __FILE__);
 define('CUSTOM_PIXELS_DIR', plugin_dir_path(__FILE__));
 define('CUSTOM_PIXELS_URL', plugin_dir_url(__FILE__));
